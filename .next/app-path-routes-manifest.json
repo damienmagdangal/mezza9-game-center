@@ -1,0 +1,14 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/api/admin/export/route": "/api/admin/export",
+  "/api/admin/reservation-status/route": "/api/admin/reservation-status",
+  "/api/availability/route": "/api/availability",
+  "/api/availability/week/route": "/api/availability/week",
+  "/api/admin/table-status/route": "/api/admin/table-status",
+  "/api/reservations/route": "/api/reservations",
+  "/admin/page": "/admin",
+  "/login/page": "/login",
+  "/terms/page": "/terms",
+  "/lounge-ops/page": "/lounge-ops",
+  "/page": "/"
+}
