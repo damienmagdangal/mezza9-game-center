@@ -27,7 +27,6 @@ export default function LoginPage() {
     }
 
     const adminPath = process.env.NEXT_PUBLIC_ADMIN_PATH || "/lounge-ops";
-    console.log(adminPath);
     window.location.assign(adminPath);
   }
 
