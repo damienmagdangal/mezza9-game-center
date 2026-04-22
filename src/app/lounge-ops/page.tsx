@@ -68,9 +68,9 @@ async function getDashboardData(searchParams: SearchParams) {
         customers:customer_id (full_name, phone, email)
       `,
       )
-      .gte("created_at", startOfDay.toISOString())
-      .lt("created_at", endOfDay.toISOString())
-      .order("created_at", { ascending: false }),
+      .lt("start_time", endOfDay.toISOString())
+      .gt("end_time", startOfDay.toISOString())
+      .order("start_time", { ascending: true }),
     supabaseAdmin.from("tables").select("id, table_number, model_name, status, is_premium").order("table_number"),
   ]);
 
@@ -277,7 +277,7 @@ export default async function AdminPage({
                   <th className="px-4 py-2">Customer</th>
                   <th className="px-4 py-2">Contact</th>
                   <th className="px-4 py-2">Table</th>
-                  <th className="px-4 py-2">Reservation Time</th>
+                  <th className="px-4 py-2">Reservation Details</th>
                   <th className="px-4 py-2">Type</th>
                   <th className="px-4 py-2">Status</th>
                   <th className="px-4 py-2">Actions</th>
@@ -295,7 +295,12 @@ export default async function AdminPage({
                     <td className="px-4 py-2">
                       {booking.tables ? getTableDisplayLabel(booking.tables) : "-"}
                     </td>
-                    <td className="px-4 py-2">{formatBookingTimeRange(booking.start_time, booking.end_time)}</td>
+                    <td className="px-4 py-2">
+                      <p className="font-medium text-cyan-200">{formatBookingTimeRange(booking.start_time, booking.end_time)}</p>
+                      <p className="text-xs text-zinc-400">
+                        Date: {new Date(booking.start_time).toLocaleDateString("en-PH", { month: "short", day: "numeric" })}
+                      </p>
+                    </td>
                     <td className="px-4 py-2">{booking.is_web_booking ? "Web" : "Walk-in"}</td>
                     <td className="px-4 py-2">{booking.status}</td>
                     <td className="px-4 py-2">

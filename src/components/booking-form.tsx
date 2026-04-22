@@ -15,28 +15,30 @@ type LoungeTable = {
 const MAX_HOURS = 8;
 const CALENDAR_START_HOUR = 15;
 const CALENDAR_END_HOUR = 23;
-
-function toLocalDateTimeInputValue(date: Date) {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 16);
-}
-
-function buildNextStartSuggestions() {
-  const now = new Date();
-  const suggestions: string[] = [];
-  const cursor = new Date(now);
-  cursor.setMinutes(cursor.getMinutes() < 30 ? 30 : 60, 0, 0);
-
-  while (suggestions.length < 6) {
-    const hour = cursor.getHours();
-    if (hour >= 15 && hour <= 23) {
-      suggestions.push(toLocalDateTimeInputValue(cursor));
-    }
-    cursor.setMinutes(cursor.getMinutes() + 30);
-  }
-
-  return suggestions;
-}
+const TIME_SLOTS = Array.from({ length: 18 }, (_, idx) => {
+  const hour = 15 + Math.floor(idx / 2);
+  const minute = idx % 2 === 0 ? 0 : 30;
+  const label = new Date(2020, 0, 1, hour, minute).toLocaleTimeString("en-PH", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return {
+    value: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+    label,
+  };
+});
+const DATE_OPTIONS = Array.from({ length: 7 }, (_, idx) => {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + idx);
+  const value = date.toISOString().split("T")[0];
+  const label = date.toLocaleDateString("en-PH", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+  return { value, label };
+});
 
 function getStartOfLocalDay(date: Date) {
   const localDay = new Date(date);
@@ -72,10 +74,12 @@ export function BookingForm({ tables }: { tables: LoungeTable[] }) {
   const [message, setMessage] = useState("");
   const [selectedTableId, setSelectedTableId] = useState(tables[0]?.id ?? "");
   const [hours, setHours] = useState(1);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedTime, setSelectedTime] = useState("");
   const [startLocal, setStartLocal] = useState("");
   const [availability, setAvailability] = useState<{ ok: boolean; text: string }>({
     ok: true,
-    text: "Pick a date/time to check availability.",
+    text: "Pick a reservation date and time to check availability.",
   });
   const [weeklyReservations, setWeeklyReservations] = useState<WeeklyReservation[]>([]);
   const [calendarError, setCalendarError] = useState("");
@@ -91,8 +95,16 @@ export function BookingForm({ tables }: { tables: LoungeTable[] }) {
   const fullNameIsValid = fullName.trim().length > 1;
   const hoursIsValid = Number.isInteger(hours) && hours >= 1 && hours <= MAX_HOURS;
 
+  useEffect(() => {
+    if (!selectedDate || !selectedTime) {
+      setStartLocal("");
+      return;
+    }
+    setStartLocal(`${selectedDate}T${selectedTime}`);
+  }, [selectedDate, selectedTime]);
+
   function getBusinessRuleError() {
-    if (!startLocal) return "Pick a date/time to check availability.";
+    if (!startLocal) return "Pick a reservation date and time to check availability.";
     if (!hoursIsValid) return `Reservation duration must be 1 to ${MAX_HOURS} hours only.`;
 
     const start = new Date(startLocal);
@@ -113,7 +125,6 @@ export function BookingForm({ tables }: { tables: LoungeTable[] }) {
 
   const businessRuleError = getBusinessRuleError();
   const pricing = selectedTable ? computeWebDiscountedPrice(selectedTable.base_price_per_hour, hours) : null;
-  const nextStartSuggestions = useMemo(() => buildNextStartSuggestions(), []);
   const calendarAnchorDate = useMemo(() => {
     const parsed = startLocal ? new Date(startLocal) : new Date();
     return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
@@ -125,6 +136,7 @@ export function BookingForm({ tables }: { tables: LoungeTable[] }) {
   );
   const canSubmit =
     fullNameIsValid && phoneIsValid && emailIsValid && agreedToTerms && !businessRuleError && availability.ok && !loading;
+  const canProceedToPlayerDetails = Boolean(startLocal) && availability.ok && !businessRuleError;
 
   useEffect(() => {
     async function checkAvailability() {
@@ -267,9 +279,11 @@ export function BookingForm({ tables }: { tables: LoungeTable[] }) {
     setPhone("");
     setEmail("");
     setAgreedToTerms(false);
+    setSelectedDate("");
+    setSelectedTime("");
     setStartLocal("");
     setHours(1);
-    setAvailability({ ok: true, text: "Pick a date/time to check availability." });
+    setAvailability({ ok: true, text: "Pick a reservation date and time to check availability." });
     form.reset();
   }
 
@@ -277,109 +291,94 @@ export function BookingForm({ tables }: { tables: LoungeTable[] }) {
 
   return (
     <form onSubmit={onSubmit} className="space-y-3 rounded-2xl border border-cyan-500/20 bg-zinc-900/70 p-4 shadow-[0_0_30px_rgba(0,255,255,0.05)]">
-      <h2 className="text-lg font-semibold text-cyan-300">Reserve a Table</h2>
-      <p className="text-xs text-zinc-400">Business hours: 3:00 PM - 1:00 AM | Max reservation: {MAX_HOURS} hours</p>
+      <h2 className="text-lg font-semibold text-cyan-300">Book Your Table</h2>
+      <p className="text-xs text-zinc-400">Choose your schedule first, then enter your reservation details.</p>
 
-      <input
-        required
-        name="fullName"
-        placeholder="Full Name"
-        value={fullName}
-        onChange={(event) => setFullName(event.target.value)}
-        className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
-      />
-
-      <div className="space-y-2">
-        <p className="text-xs text-zinc-400">Next available start times</p>
-        <div className="flex flex-wrap gap-2">
-          {nextStartSuggestions.map((timeValue) => {
-            const label = new Date(timeValue).toLocaleString("en-PH", {
-              month: "short",
-              day: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-            });
-            return (
-              <button
-                key={timeValue}
-                type="button"
-                onClick={() => setStartLocal(timeValue)}
-                className="rounded-full border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-300 transition hover:bg-cyan-500/20"
-              >
-                {label}
-              </button>
-            );
-          })}
+      <div className="grid grid-cols-2 gap-2 rounded-xl border border-zinc-700 bg-zinc-950/60 p-2 text-xs">
+        <div className="rounded-lg border border-cyan-400/40 bg-cyan-500/10 px-2 py-2 text-center text-cyan-200">
+          1) Schedule
+        </div>
+        <div
+          className={`rounded-lg px-2 py-2 text-center ${
+            canProceedToPlayerDetails
+              ? "border border-lime-400/40 bg-lime-500/10 text-lime-200"
+              : "border border-zinc-700 bg-zinc-900 text-zinc-400"
+          }`}
+        >
+          2) Guest Details
         </div>
       </div>
-      <input
-        required
-        name="phone"
-        placeholder="Phone Number"
-        value={phone}
-        onChange={(event) => setPhone(event.target.value)}
-        className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
-      />
-      <input
-        required
-        type="email"
-        name="email"
-        placeholder="Email Address"
-        value={email}
-        onChange={(event) => setEmail(event.target.value)}
-        className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
-      />
-      <input
-        required
-        type="datetime-local"
-        name="startTime"
-        value={startLocal}
-        onChange={(event) => setStartLocal(event.target.value)}
-        className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
-      />
 
-      <div className="grid grid-cols-2 gap-2">
-        <select
-          required
-          name="tableId"
-          className="rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
-          value={selectedTableId}
-          onChange={(event) => setSelectedTableId(event.target.value)}
-        >
-          {tables.map((table) => (
-            <option key={table.id} value={table.id}>
-              {getTableDisplayLabel(table)}
-            </option>
-          ))}
-        </select>
-        <select
-          name="hours"
-          value={hours}
-          onChange={(event) => setHours(Number(event.target.value))}
-          className="rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
-        >
-          {Array.from({ length: MAX_HOURS }, (_, idx) => idx + 1).map((h) => (
-            <option key={h} value={h}>
-              {h} hour{h > 1 ? "s" : ""}
-            </option>
-          ))}
-        </select>
+      <div className="space-y-3 rounded-xl border border-cyan-500/20 bg-zinc-950/70 p-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-cyan-200">Step 1 - Check Table Availability</p>
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          <select
+            required
+            name="tableId"
+            className="rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
+            value={selectedTableId}
+            onChange={(event) => setSelectedTableId(event.target.value)}
+          >
+            {tables.map((table) => (
+              <option key={table.id} value={table.id}>
+                {getTableDisplayLabel(table)}
+              </option>
+            ))}
+          </select>
+          <select
+            required
+            name="date"
+            value={selectedDate}
+            onChange={(event) => setSelectedDate(event.target.value)}
+            className="rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
+          >
+            <option value="">Select reservation date</option>
+            {DATE_OPTIONS.map((dateOption) => (
+              <option key={dateOption.value} value={dateOption.value}>
+                {dateOption.label}
+              </option>
+            ))}
+          </select>
+          <select
+            required
+            name="time"
+            value={selectedTime}
+            onChange={(event) => setSelectedTime(event.target.value)}
+            className="rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
+          >
+            <option value="">Select start time</option>
+            {TIME_SLOTS.map((slot) => (
+              <option key={slot.value} value={slot.value}>
+                {slot.label}
+              </option>
+            ))}
+          </select>
+          <select
+            name="hours"
+            value={hours}
+            onChange={(event) => setHours(Number(event.target.value))}
+            className="rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
+          >
+            {Array.from({ length: MAX_HOURS }, (_, idx) => idx + 1).map((h) => (
+              <option key={h} value={h}>
+                {h} hour{h > 1 ? "s" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="text-xs text-zinc-400">Business hours: 3:00 PM - 1:00 AM | Max reservation: {MAX_HOURS} hours</p>
       </div>
 
       <div className="space-y-1 text-xs">
-        {!phoneIsValid && phone ? <p className="text-red-300">Enter a valid mobile number (10-15 digits).</p> : null}
-        {!emailIsValid && email ? <p className="text-red-300">Enter a valid email address.</p> : null}
         {!hoursIsValid ? <p className="text-red-300">Maximum reservation time is {MAX_HOURS} hours.</p> : null}
         {businessRuleError && startLocal ? <p className="text-red-300">{businessRuleError}</p> : null}
       </div>
 
-      <p className={`text-xs ${availability.ok ? "text-lime-300" : "text-red-300"}`}>
-        Availability: {availability.text}
-      </p>
+      <p className={`text-xs ${availability.ok ? "text-lime-300" : "text-red-300"}`}>Availability: {availability.text}</p>
 
       <div className="space-y-2 rounded-lg border border-zinc-700 bg-zinc-950/70 p-3">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-300">Current Reservations</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-300">Weekly Reservation Calendar (7 days)</p>
         </div>
         <div className="overflow-x-auto">
           <div className="min-w-[720px]">
@@ -399,35 +398,25 @@ export function BookingForm({ tables }: { tables: LoungeTable[] }) {
                   </div>
                   {calendarWeekDays.map((day) => {
                     const key = `${day.toISOString()}-${hour}`;
-                    const overlaps = calendarReservationsByCell.get(key) ?? [];
+                    const overlaps = (calendarReservationsByCell.get(key) ?? []).filter((item) => item.tableId === selectedTableId);
                     return (
                       <div key={key} className="min-h-10 rounded border border-zinc-800 bg-zinc-900/60 p-1">
                         {overlaps.length === 0 ? (
                           <p className="text-center text-[10px] text-zinc-600">-</p>
                         ) : (
                           <div className="flex flex-wrap gap-1">
-                            {overlaps.map((reservation) => {
-                              const isSelectedTable = reservation.tableId === selectedTableId;
-                              return (
-                                <span
-                                  key={reservation.id}
-                                  className={`rounded px-1.5 py-0.5 text-[10px] ${
-                                    isSelectedTable ? "bg-red-500/80 text-white" : "bg-cyan-500/80 text-black"
-                                  }`}
-                                  title={`${getTableDisplayLabel({ table_number: reservation.tableNumber, model_name: reservation.modelName })} • ${new Date(
-                                    reservation.startTimeISO,
-                                  ).toLocaleTimeString("en-PH", {
-                                    hour: "numeric",
-                                    minute: "2-digit",
-                                  })} - ${new Date(reservation.endTimeISO).toLocaleTimeString("en-PH", {
-                                    hour: "numeric",
-                                    minute: "2-digit",
-                                  })}`}
-                                >
-                                  T{reservation.tableNumber}
-                                </span>
-                              );
-                            })}
+                            {overlaps.map((reservation) => (
+                              <span
+                                key={reservation.id}
+                                className="rounded bg-red-500/80 px-1.5 py-0.5 text-[10px] text-white"
+                                title={`${new Date(reservation.startTimeISO).toLocaleTimeString("en-PH", {
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                })} - ${new Date(reservation.endTimeISO).toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" })}`}
+                              >
+                                Reserved
+                              </span>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -440,8 +429,46 @@ export function BookingForm({ tables }: { tables: LoungeTable[] }) {
         </div>
         {calendarLoading ? <p className="text-xs text-zinc-400">Loading weekly reservations...</p> : null}
         {calendarError ? <p className="text-xs text-red-300">{calendarError}</p> : null}
-        <p className="text-[11px] text-zinc-500">Red tag indicates your currently selected table.</p>
       </div>
+
+      {canProceedToPlayerDetails ? (
+        <div className="space-y-3 rounded-xl border border-lime-500/30 bg-lime-500/10 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-lime-300">Step 2 - Guest Details</p>
+          <input
+            required
+            name="fullName"
+            placeholder="Guest Full Name"
+            value={fullName}
+            onChange={(event) => setFullName(event.target.value)}
+            className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
+          />
+          <input
+            required
+            name="phone"
+            placeholder="Mobile Number"
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+            className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
+          />
+          <input
+            required
+            type="email"
+            name="email"
+            placeholder="Email Address"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm"
+          />
+          <div className="space-y-1 text-xs">
+            {!phoneIsValid && phone ? <p className="text-red-300">Enter a valid mobile number (10-15 digits).</p> : null}
+            {!emailIsValid && email ? <p className="text-red-300">Enter a valid email address.</p> : null}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-zinc-700 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-400">
+          Reservation details will appear once your selected schedule is available.
+        </div>
+      )}
 
       <label className="flex items-start gap-2 text-xs text-zinc-300">
         <input
@@ -452,9 +479,7 @@ export function BookingForm({ tables }: { tables: LoungeTable[] }) {
           onChange={(event) => setAgreedToTerms(event.target.checked)}
           className="mt-0.5"
         />
-        <span>
-          I agree to the 15-minute grace period and forfeiture rule. I also accept the equipment care policy under the terms.
-        </span>
+        <span>I agree to the 15-minute grace period and forfeiture rule. I also accept the equipment care policy under the terms.</span>
       </label>
 
       <div className="rounded-lg border border-cyan-500/20 bg-zinc-800/70 p-3 text-sm">
@@ -469,7 +494,7 @@ export function BookingForm({ tables }: { tables: LoungeTable[] }) {
         className="w-full rounded-md bg-cyan-400 px-3 py-2 font-semibold text-black disabled:opacity-60"
         type="submit"
       >
-        {loading ? "Processing..." : "Book Now"}
+        {loading ? "Processing..." : "Confirm Booking"}
       </button>
 
       {message ? <p className="text-sm text-lime-300">{message}</p> : null}

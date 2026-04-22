@@ -28,18 +28,16 @@ export default async function HomePage() {
           <p className="text-sm text-zinc-300">Book online and get <strong className="text-cyan-300">10% off</strong> instantly. Premium feel, fast confirmation.</p>
         </header>
 
-
-        <BookingForm tables={tableRows} />
-
         <div className="space-y-3 rounded-2xl border border-zinc-700 bg-zinc-900/60 p-4 text-sm">
         <h2 className="text-lg font-semibold text-cyan-300">Our Latest Price List</h2>
+        <p className="text-xs text-zinc-400">Published rates per hour. Select your schedule below to continue booking.</p>
           {tableRows.map((table) => (
             (() => {
               const isPremiumTable = table.is_premium;
               return (
             <div
               key={table.id}
-              className={`rounded-xl border p-3 ${
+              className={`rounded-xl border p-3 cursor-default ${
                 isPremiumTable
                   ? "border-yellow-400/50 bg-gradient-to-r from-yellow-500/15 via-amber-500/10 to-zinc-900 shadow-[0_0_30px_rgba(250,204,21,0.18)]"
                   : "border-zinc-700 bg-zinc-900/70"
@@ -64,6 +62,10 @@ export default async function HomePage() {
             })()
           ))}
         </div>
+
+
+        <BookingForm tables={tableRows} />
+
 
         <section className="rounded-2xl border border-zinc-700 bg-zinc-900/60 p-4 text-sm">
           <p className="mb-2 text-xs uppercase tracking-widest text-zinc-400">Follow Mezza9</p>
